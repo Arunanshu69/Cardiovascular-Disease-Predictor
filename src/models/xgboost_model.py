@@ -188,15 +188,26 @@ class XGBoostModel:
         Returns:
             self: XGBoostModel instance with loaded model
         """
-        model_data = joblib.load(filepath)
-        
-        self.model = model_data['model']
-        self.feature_names = model_data['feature_names']
-        self.random_state = model_data['random_state']
-        self.is_fitted = True
-        
-        print(f"Model loaded from {filepath}")
-        return self
+        try:
+            model_data = joblib.load(filepath)
+            
+            # Validate that the loaded data has the expected keys
+            required_keys = ['model', 'feature_names', 'random_state']
+            for key in required_keys:
+                if key not in model_data:
+                    raise ValueError(f"Loaded model data is missing required key: {key}")
+            
+            self.model = model_data['model']
+            self.feature_names = model_data['feature_names']
+            self.random_state = model_data['random_state']
+            self.is_fitted = True
+            
+            print(f"Model loaded from {filepath}")
+            return self
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Model file not found at {filepath}")
+        except Exception as e:
+            raise ValueError(f"Error loading model from {filepath}: {e}")
     
     def get_model_params(self) -> Dict:
         """

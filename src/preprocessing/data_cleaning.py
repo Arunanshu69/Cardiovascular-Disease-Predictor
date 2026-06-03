@@ -42,7 +42,17 @@ class DataCleaner:
             self.numerical_imputer[col] = df[col].median()
         
         for col in self.categorical_columns:
-            self.categorical_imputer[col] = df[col].mode()[0] if not df[col].mode().empty else df[col].value_counts().idxmax()
+            if col in df.columns:
+                col_mode = df[col].mode()
+                if not col_mode.empty:
+                    self.categorical_imputer[col] = col_mode[0]
+                else:
+                    # If mode is empty (all NaN), use the most frequent value or a default
+                    value_counts = df[col].value_counts()
+                    if not value_counts.empty:
+                        self.categorical_imputer[col] = value_counts.idxmax()
+                    else:
+                        self.categorical_imputer[col] = 'unknown'
         
         return self
     

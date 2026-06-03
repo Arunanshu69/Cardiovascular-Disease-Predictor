@@ -29,6 +29,11 @@ class GeneticAlgorithmOptimizer:
             mutation_prob: Probability of mutation
             random_state: Random state for reproducibility
         """
+        # Validate tournament_size
+        if tournament_size >= population_size:
+            tournament_size = min(population_size - 1, 3)
+            print(f"Warning: tournament_size >= population_size. Setting tournament_size to {tournament_size}")
+        
         self.population_size = population_size
         self.generations = generations
         self.tournament_size = tournament_size
