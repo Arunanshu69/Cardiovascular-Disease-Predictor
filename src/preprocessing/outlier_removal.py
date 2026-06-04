@@ -43,7 +43,7 @@ class OutlierRemover:
         outlier_mask = pd.Series([False] * len(df), index=df.index)
         
         for col in columns:
-            if col in df.columns and df[col].dtype in [np.number, 'int64', 'float64']:
+            if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
                 z_scores = np.abs(stats.zscore(df[col].dropna()))
                 col_outliers = z_scores > self.z_threshold
                 # Convert to Series with proper index
@@ -69,7 +69,7 @@ class OutlierRemover:
         outlier_mask = pd.Series([False] * len(df), index=df.index)
         
         for col in columns:
-            if col in df.columns and df[col].dtype in [np.number, 'int64', 'float64']:
+            if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
                 Q1 = df[col].quantile(0.25)
                 Q3 = df[col].quantile(0.75)
                 IQR = Q3 - Q1
@@ -152,7 +152,7 @@ class OutlierRemover:
         summary_data = []
         
         for col in numerical_cols:
-            if df[col].dtype in [np.number, 'int64', 'float64']:
+            if pd.api.types.is_numeric_dtype(df[col]):
                 # Z-score outliers
                 z_scores = np.abs(stats.zscore(df[col].dropna()))
                 z_outliers = (z_scores > self.z_threshold).sum()
@@ -192,7 +192,7 @@ class OutlierRemover:
         df_capped = df.copy()
         
         for col in columns:
-            if col in df.columns and df[col].dtype in [np.number, 'int64', 'float64']:
+            if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
                 Q1 = df[col].quantile(0.25)
                 Q3 = df[col].quantile(0.75)
                 IQR = Q3 - Q1

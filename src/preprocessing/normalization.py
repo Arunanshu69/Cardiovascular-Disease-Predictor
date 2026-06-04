@@ -20,7 +20,6 @@ class Normalizer:
         self.method = method
         self.scaler = None
         self.numerical_columns = None
-        self.scalers_dict = {}
     
     def fit(self, df: pd.DataFrame, columns: Optional[list] = None, 
             target_column: Optional[str] = None) -> 'Normalizer':

@@ -62,19 +62,37 @@ def main():
     # Diffusion-based synthetic data generation
     if args.use_diffusion:
         print("\n[3/8] Training TabDDPM for synthetic data generation...")
+        
+        # Separate minority class for training diffusion model
+        df_minority = df_normalized[df_normalized[args.target_column] == 1]
+        df_majority = df_normalized[df_normalized[args.target_column] == 0]
+        
+        # Train diffusion model on minority class features only
         trainer = TabDDPMTrainer(epochs=50)
-        trainer.fit(df_normalized, args.target_column)
+        trainer.fit(df_minority, args.target_column)
         
         generator = TabDDPMGenerator(trainer)
-        df_balanced = generator.generate_balanced_dataset(df_normalized, args.target_column)
         
-        # Save comparison plots
-        generator.compare_distributions(df_normalized, df_balanced[df_balanced[args.target_column] == 1], 
-                                       save_path=os.path.join(args.output_dir, 'distribution_comparison.png'))
-        generator.compare_correlations(df_normalized, df_balanced, 
-                                      save_path=os.path.join(args.output_dir, 'correlation_comparison.png'))
-        
-        df_normalized = df_balanced
+        # Generate synthetic samples to balance the dataset
+        samples_needed = len(df_majority) - len(df_minority)
+        if samples_needed > 0:
+            feature_names = [col for col in df_normalized.columns if col != args.target_column]
+            synthetic_samples = generator.sample(samples_needed, feature_names)
+            synthetic_samples[args.target_column] = 1
+            
+            # Combine with original data
+            df_balanced = pd.concat([df_normalized, synthetic_samples], ignore_index=True)
+            
+            # Save comparison plots
+            generator.compare_distributions(df_minority[feature_names], synthetic_samples[feature_names], 
+                                           save_path=os.path.join(args.output_dir, 'distribution_comparison.png'))
+            generator.compare_correlations(df_normalized, df_balanced, 
+                                          save_path=os.path.join(args.output_dir, 'correlation_comparison.png'))
+            
+            df_normalized = df_balanced
+            print(f"Balanced dataset: {len(df_normalized)} samples")
+        else:
+            print("Dataset is already balanced.")
     
     # Feature selection
     print("\n[4/8] Feature selection...")

@@ -84,82 +84,60 @@ col1, col2 = st.columns(2)
 with col1:
     st.subheader("Demographics")
     age = st.slider("Age", 18, 100, 50)
-    sex = st.selectbox("Sex", ["Male", "Female"])
-    
-    st.subheader("Vital Signs")
-    resting_bp = st.slider("Resting Blood Pressure (mm Hg)", 90, 200, 120)
-    cholesterol = st.slider("Serum Cholesterol (mg/dl)", 100, 400, 200)
-    max_hr = st.slider("Maximum Heart Rate", 60, 220, 150)
+    gender = st.selectbox("Gender", ["Female", "Male"])
+    height = st.slider("Height (cm)", 130, 220, 170)
+    weight = st.slider("Weight (kg)", 40, 150, 70)
+
+    st.subheader("Blood Pressure")
+    ap_high = st.slider("Systolic Blood Pressure (AP_HIGH)", 90, 200, 120)
+    ap_low = st.slider("Diastolic Blood Pressure (AP_LOW)", 60, 140, 80)
 
 with col2:
-    st.subheader("Health Metrics")
-    fasting_bs = st.selectbox("Fasting Blood Sugar > 120 mg/dl", ["No", "Yes"])
-    resting_ecg = st.selectbox("Resting ECG Results", ["Normal", "ST-T Wave Abnormality", "Left Ventricular Hypertrophy"])
-    
+    st.subheader("Lab Results")
+    cholesterol = st.selectbox("Cholesterol Level", ["Normal", "Above Normal", "Well Above Normal"])
+    glucose = st.selectbox("Glucose Level", ["Normal", "Above Normal", "Well Above Normal"])
+
     st.subheader("Lifestyle")
     smoking = st.selectbox("Smoking", ["No", "Yes"])
+    alcohol = st.selectbox("Alcohol Consumption", ["No", "Yes"])
     physical_activity = st.slider("Physical Activity (hours/week)", 0, 20, 3)
-    
-    st.subheader("Other")
-    bmi = st.slider("BMI", 15, 50, 25)
-    glucose = st.slider("Glucose Level (mg/dl)", 50, 300, 100)
 
-# Convert categorical to numerical
-sex_num = 1 if sex == "Male" else 0
-fasting_bs_num = 1 if fasting_bs == "Yes" else 0
+# Convert categorical inputs to model encoding
+gender_num = 2 if gender == "Male" else 1
+cholesterol_num = 1 if cholesterol == "Normal" else (2 if cholesterol == "Above Normal" else 3)
+glucose_num = 1 if glucose == "Normal" else (2 if glucose == "Above Normal" else 3)
 smoking_num = 1 if smoking == "Yes" else 0
+alcohol_num = 1 if alcohol == "Yes" else 0
 
-# ECG encoding
-resting_ecg_num = 0 if resting_ecg == "Normal" else (1 if resting_ecg == "ST-T Wave Abnormality" else 2)
-
-# Create input DataFrame
+# Create input DataFrame matching the trained model's expected features
 input_data = pd.DataFrame({
-    'age': [age],
-    'sex': [sex_num],
-    'trestbps': [resting_bp],
-    'chol': [cholesterol],
-    'thalach': [max_hr],
-    'fbs': [fasting_bs_num],
-    'restecg': [resting_ecg_num],
-    'smoking': [smoking_num],
-    'physical_activity': [physical_activity],
-    'bmi': [bmi],
-    'glucose': [glucose]
+    'AGE': [age],
+    'GENDER': [gender_num],
+    'HEIGHT': [height],
+    'WEIGHT': [weight],
+    'AP_HIGH': [ap_high],
+    'AP_LOW': [ap_low],
+    'CHOLESTEROL': [cholesterol_num],
+    'GLUCOSE': [glucose_num],
+    'SMOKE': [smoking_num],
+    'ALCOHOL': [alcohol_num],
+    'PHYSICAL_ACTIVITY': [physical_activity]
 })
-
-# Feature mapping (adjust based on actual model features)
-feature_mapping = {
-    'age': 'age',
-    'sex': 'sex',
-    'trestbps': 'trestbps',
-    'chol': 'chol',
-    'thalach': 'thalach',
-    'fbs': 'fbs',
-    'restecg': 'restecg',
-    'smoking': 'smoking',
-    'physical_activity': 'physical_activity',
-    'bmi': 'bmi',
-    'glucose': 'glucose'
-}
 
 # Predict button
 if st.button("Predict Heart Disease Risk", type="primary"):
-    # Get model features
-    model_features = model.feature_names
-    
-    # Map input data to model features
-    prediction_data = pd.DataFrame()
-    for feature in model_features:
-        if feature in input_data.columns:
-            prediction_data[feature] = input_data[feature]
-        else:
-            # Use default value if feature not in input
-            prediction_data[feature] = [0]
-    
+    model_features = model.feature_names or []
+    missing_features = [f for f in model_features if f not in input_data.columns]
+    if missing_features:
+        st.error(f"The model requires these missing features: {missing_features}")
+        st.stop()
+
+    prediction_data = input_data[model_features].copy()
+
     # Make prediction
     prediction = model.predict(prediction_data)[0]
     probability = model.predict_proba(prediction_data)[0, 1]
-    
+
     # Display results
     st.header("Prediction Results")
     

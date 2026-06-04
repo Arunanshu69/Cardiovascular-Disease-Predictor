@@ -100,8 +100,8 @@ class TabDDPMTrainer:
         self.model = None
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
-        # Diffusion schedule
-        self.betas = torch.linspace(beta_start, beta_end, num_timesteps)
+        # Diffusion schedule (moved to device to prevent mismatch)
+        self.betas = torch.linspace(beta_start, beta_end, num_timesteps).to(self.device)
         self.alphas = 1.0 - self.betas
         self.alphas_cumprod = torch.cumprod(self.alphas, dim=0)
         
@@ -276,8 +276,8 @@ class TabDDPMTrainer:
         self.hidden_dim = model_data['hidden_dim']
         self.num_layers = model_data['num_layers']
         
-        # Rebuild noise schedule
-        self.betas = torch.linspace(self.beta_start, self.beta_end, self.num_timesteps)
+        # Rebuild noise schedule (moved to device to prevent mismatch)
+        self.betas = torch.linspace(self.beta_start, self.beta_end, self.num_timesteps).to(self.device)
         self.alphas = 1.0 - self.betas
         self.alphas_cumprod = torch.cumprod(self.alphas, dim=0)
         

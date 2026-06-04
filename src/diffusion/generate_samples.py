@@ -42,13 +42,13 @@ class TabDDPMGenerator:
         # Predict noise
         predicted_noise = self.model(x, t)
         
-        # Get schedule values for timestep t
-        alpha_t = schedule['alphas'][t].unsqueeze(-1)
-        alpha_cumprod_t = schedule['alphas_cumprod'][t].unsqueeze(-1)
-        beta_t = schedule['betas'][t].unsqueeze(-1)
+        # Get schedule values for timestep t (ensure they're on the same device)
+        alpha_t = schedule['alphas'][t].unsqueeze(-1).to(self.device)
+        alpha_cumprod_t = schedule['alphas_cumprod'][t].unsqueeze(-1).to(self.device)
+        beta_t = schedule['betas'][t].unsqueeze(-1).to(self.device)
         
-        # Compute mean
-        mean = (x - (beta_t / torch.sqrt(1 - alpha_cumprod_t)) * predicted_noise) / torch.sqrt(alpha_t)
+        # Compute mean with epsilon to prevent division by zero
+        mean = (x - (beta_t / torch.sqrt(1 - alpha_cumprod_t + 1e-8)) * predicted_noise) / torch.sqrt(alpha_t + 1e-8)
         
         # Add noise if not final step
         if t[0] > 0:
@@ -126,11 +126,10 @@ class TabDDPMGenerator:
         # Get feature names (excluding target)
         feature_names = [col for col in df.columns if col != target_column]
         
-        # Train on minority class
+        # Get minority class features for sampling reference
         minority_features = df_minority[feature_names].values
-        self.trainer.fit(df_minority, target_column)
         
-        # Generate synthetic samples
+        # Generate synthetic samples using the already-trained model
         synthetic_samples = self.sample(samples_needed, feature_names)
         
         # Add target column
