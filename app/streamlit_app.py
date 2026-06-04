@@ -70,6 +70,15 @@ def load_model(model_path):
         st.error(f"Error loading model: {e}")
         return None
 
+# Cache SHAP explainer (expensive operation) separately from SHAP values
+@st.cache_resource
+def get_shap_explainer(_model):
+    try:
+        explainer = shap.TreeExplainer(_model)
+        return explainer
+    except Exception as e:
+        return None
+
 model = load_model(model_path)
 
 if model is None:
@@ -186,25 +195,49 @@ if st.button("Predict Heart Disease Risk", type="primary"):
     st.header("Explainability (SHAP)")
     
     try:
-        shap_analyzer = SHAPAnalyzer(model.model)
-        shap_analyzer.fit(prediction_data)
+        # Use cached SHAP explainer to prevent repeated fitting
+        explainer = get_shap_explainer(model.model)
+        
+        if explainer is None:
+            st.warning("Could not initialize SHAP explainer")
+            st.stop()
         
         # SHAP force plot
         st.subheader("Feature Contribution")
         
-        explainer = shap.TreeExplainer(model.model)
+        # Calculate SHAP values for the prediction
         shap_values = explainer.shap_values(prediction_data)
         
-        # Create force plot
-        fig = plt.figure(figsize=(12, 4))
-        shap.force_plot(
-            explainer.expected_value,
-            shap_values[0],
-            prediction_data.iloc[0],
-            feature_names=model_features,
+        # Handle different shap_values formats (binary classification returns list, single class returns array)
+        if isinstance(shap_values, list):
+            shap_values = shap_values[1] if len(shap_values) > 1 else shap_values[0]
+        
+        # Validate shap_values shape
+        if len(shap_values) == 0:
+            st.warning("No SHAP values calculated")
+            st.stop()
+        
+        instance_shap = shap_values[0]
+        instance_data = prediction_data.iloc[0]
+        base_value = explainer.expected_value
+        
+        # Handle base_value for binary classification (might be array)
+        if isinstance(base_value, (list, np.ndarray)):
+            base_value = base_value[1] if len(base_value) > 1 else base_value[0]
+        
+        # Use waterfall plot instead of force plot for better Streamlit rendering
+        fig = plt.figure(figsize=(12, 6))
+        shap.waterfall_plot(
+            shap.Explanation(
+                values=instance_shap,
+                base_values=base_value,
+                data=instance_data.values,
+                feature_names=model_features
+            ),
             show=False,
-            matplotlib=True
+            max_display=10
         )
+        plt.title('Feature Contribution (SHAP Waterfall Plot)')
         plt.tight_layout()
         st.pyplot(fig)
         plt.close()
@@ -212,13 +245,23 @@ if st.button("Predict Heart Disease Risk", type="primary"):
         # Feature importance
         st.subheader("Top Feature Contributions")
         
-        importance_df = shap_analyzer.get_feature_importance_df()
-        importance_df = importance_df.head(10)
+        # Calculate mean absolute SHAP values for feature importance
+        mean_shap = np.abs(shap_values).mean(axis=0)
+        
+        # Validate mean_shap shape
+        if len(mean_shap) != len(model_features):
+            st.warning("SHAP values shape mismatch with features")
+            st.stop()
+        
+        importance_df = pd.DataFrame({
+            'feature': model_features,
+            'shap_importance': mean_shap
+        }).sort_values('shap_importance', ascending=False).head(10)
         
         fig, ax = plt.subplots(figsize=(10, 6))
-        ax.barh(range(len(importance_df)), importance_df['shap_importance'][::-1])
+        ax.barh(range(len(importance_df)), importance_df['shap_importance'].values)
         ax.set_yticks(range(len(importance_df)))
-        ax.set_yticklabels(importance_df['feature'][::-1])
+        ax.set_yticklabels(importance_df['feature'].values)
         ax.set_xlabel('SHAP Value (Impact on Prediction)')
         ax.set_title('Top 10 Feature Contributions')
         plt.tight_layout()
