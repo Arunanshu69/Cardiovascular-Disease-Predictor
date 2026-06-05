@@ -29,7 +29,7 @@ class XGBoostModel:
               y: pd.Series,
               params: Optional[Dict] = None,
               test_size: float = 0.2,
-              cv: int = 5) -> Dict:
+              cv: int = 10) -> Dict:
         """
         Train XGBoost model with optional cross-validation.
         
@@ -59,6 +59,9 @@ class XGBoostModel:
                 'eval_metric': 'logloss',
                 'n_jobs': -1
             }
+        
+        # Add class weight for imbalanced datasets
+        params['scale_pos_weight'] = (len(y) - y.sum()) / max(y.sum(), 1)
         
         # Train-test split
         X_train, X_test, y_train, y_test = train_test_split(

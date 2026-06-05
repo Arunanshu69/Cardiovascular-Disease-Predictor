@@ -54,6 +54,11 @@ class MetricsCalculator:
             Specificity score
         """
         cm = confusion_matrix(y_true, y_pred)
+        
+        # Handle case where confusion matrix is not 2x2 (single class prediction)
+        if cm.shape != (2, 2):
+            return 0.0
+        
         tn, fp, fn, tp = cm.ravel()
         
         if tn + fp == 0:

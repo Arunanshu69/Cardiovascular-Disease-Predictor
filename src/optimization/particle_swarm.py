@@ -135,7 +135,13 @@ class ParticleSwarmOptimizer:
             )
             
             scores = cross_val_score(model, X, y, cv=cv, scoring='roc_auc', n_jobs=-1)
-            return scores.mean()
+            mean_score = scores.mean()
+            
+            # Handle NaN or invalid scores
+            if np.isnan(mean_score) or np.isinf(mean_score):
+                return 0.0
+            
+            return mean_score
         except Exception as e:
             return 0.0
     
@@ -153,7 +159,12 @@ class ParticleSwarmOptimizer:
         r2 = np.random.random(len(self.param_bounds))
         
         cognitive = self.c1 * r1 * (self.personal_best_positions[particle_idx] - self.particles[particle_idx])
-        social = self.c2 * r2 * (self.global_best_position - self.particles[particle_idx])
+        
+        # Handle case where global_best_position is None
+        if self.global_best_position is not None:
+            social = self.c2 * r2 * (self.global_best_position - self.particles[particle_idx])
+        else:
+            social = np.zeros_like(self.particles[particle_idx])
         
         new_velocity = self.w * self.velocities[particle_idx] + cognitive + social
         

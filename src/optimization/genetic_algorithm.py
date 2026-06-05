@@ -102,7 +102,13 @@ class GeneticAlgorithmOptimizer:
             )
             
             scores = cross_val_score(model, X, y, cv=cv, scoring='roc_auc', n_jobs=-1)
-            return scores.mean()
+            mean_score = scores.mean()
+            
+            # Handle NaN or invalid scores
+            if np.isnan(mean_score) or np.isinf(mean_score):
+                return 0.0
+            
+            return mean_score
         except Exception as e:
             print(f"Error evaluating individual: {e}")
             return 0.0
