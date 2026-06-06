@@ -43,13 +43,15 @@ class GeneticAlgorithmOptimizer:
         
         # Hyperparameter search space
         self.param_bounds = {
-            'max_depth': (3, 10),
-            'learning_rate': (0.01, 0.3),
-            'n_estimators': (50, 500),
-            'subsample': (0.5, 1.0),
-            'colsample_bytree': (0.5, 1.0),
-            'gamma': (0, 5),
-            'min_child_weight': (1, 10)
+            'max_depth': (3, 6),  # Reduced upper bound for simpler models
+            'learning_rate': (0.01, 0.2),
+            'n_estimators': (100, 500),
+            'subsample': (0.7, 1.0),
+            'colsample_bytree': (0.7, 1.0),  # Restricted
+            'gamma': (0.0, 2.0),  # Restricted
+            'min_child_weight': (1, 5),  # Restricted
+            'reg_alpha': (0.1, 2.0),  # Increased upper bound for L1 regularization
+            'reg_lambda': (1.0, 5.0)  # Increased upper bound for L2 regularization
         }
         
         self.best_params = None
@@ -96,6 +98,8 @@ class GeneticAlgorithmOptimizer:
                 colsample_bytree=individual['colsample_bytree'],
                 gamma=individual['gamma'],
                 min_child_weight=int(individual['min_child_weight']),
+                reg_alpha=individual.get('reg_alpha', 0.1),
+                reg_lambda=individual.get('reg_lambda', 1.0),
                 random_state=self.random_state,
                 eval_metric='logloss',
                 n_jobs=-1
@@ -131,7 +135,8 @@ class GeneticAlgorithmOptimizer:
     
     def _crossover(self, parent1: Dict, parent2: Dict) -> Tuple[Dict, Dict]:
         """
-        Perform crossover between two parents.
+        Perform crossover between two parents with improved strategy.
+        Uses blend crossover for continuous parameters and uniform crossover for discrete.
         
         Args:
             parent1: First parent
@@ -143,33 +148,50 @@ class GeneticAlgorithmOptimizer:
         child1, child2 = {}, {}
         
         for param in self.param_bounds.keys():
-            if random.random() < 0.5:
-                child1[param] = parent1[param]
-                child2[param] = parent2[param]
+            if param in ['max_depth', 'n_estimators', 'min_child_weight']:
+                # Uniform crossover for discrete parameters
+                if random.random() < 0.5:
+                    child1[param] = parent1[param]
+                    child2[param] = parent2[param]
+                else:
+                    child1[param] = parent2[param]
+                    child2[param] = parent1[param]
             else:
-                child1[param] = parent2[param]
-                child2[param] = parent1[param]
+                # Blend crossover (arithmetic) for continuous parameters
+                alpha = random.uniform(0, 1)
+                child1[param] = alpha * parent1[param] + (1 - alpha) * parent2[param]
+                child2[param] = alpha * parent2[param] + (1 - alpha) * parent1[param]
         
         return child1, child2
     
-    def _mutate(self, individual: Dict) -> Dict:
+    def _mutate(self, individual: Dict, generation: int = 0) -> Dict:
         """
-        Perform mutation on an individual.
+        Perform mutation on an individual with adaptive mutation rate.
+        Mutation rate decreases as generations progress to encourage convergence.
         
         Args:
             individual: Individual to mutate
+            generation: Current generation number for adaptive mutation
             
         Returns:
             Mutated individual
         """
         mutated = individual.copy()
         
+        # Adaptive mutation rate: decreases as generations increase
+        adaptive_mutation_prob = self.mutation_prob * (1 - generation / self.generations)
+        adaptive_mutation_prob = max(adaptive_mutation_prob, 0.01)  # Minimum mutation rate
+        
         for param, (min_val, max_val) in self.param_bounds.items():
-            if random.random() < self.mutation_prob:
+            if random.random() < adaptive_mutation_prob:
                 if param in ['max_depth', 'n_estimators', 'min_child_weight']:
                     mutated[param] = random.randint(min_val, max_val)
                 else:
-                    mutated[param] = random.uniform(min_val, max_val)
+                    # Gaussian mutation for continuous parameters
+                    sigma = (max_val - min_val) * 0.1  # 10% of range
+                    mutated[param] = individual[param] + random.gauss(0, sigma)
+                    # Clip to bounds
+                    mutated[param] = max(min_val, min(max_val, mutated[param]))
         
         return mutated
     
@@ -240,9 +262,9 @@ class GeneticAlgorithmOptimizer:
                 else:
                     child1, child2 = parent1.copy(), parent2.copy()
                 
-                # Mutation
-                child1 = self._mutate(child1)
-                child2 = self._mutate(child2)
+                # Mutation with adaptive rate based on generation
+                child1 = self._mutate(child1, generation)
+                child2 = self._mutate(child2, generation)
                 
                 new_population.extend([child1, child2])
             

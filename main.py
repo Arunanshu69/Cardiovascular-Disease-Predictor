@@ -25,7 +25,7 @@ def main():
     parser = argparse.ArgumentParser(description='Heart Disease Prediction Pipeline')
     parser.add_argument('--data_path', type=str, default='data/pkiohd.csv', help='Path to dataset')
     parser.add_argument('--target_column', type=str, default='CARDIO_DISEASE', help='Target column name')
-    parser.add_argument('--use_diffusion', default=True, action='store_true', help='Use diffusion for synthetic data')
+    parser.add_argument('--use_diffusion', action='store_true', help='Use diffusion for synthetic data')
     parser.add_argument('--use_optimization', action='store_true', help='Use GA-PSO optimization')
     parser.add_argument('--external_validation', type=str, default=None, help='Path to external validation dataset')
     parser.add_argument('--output_dir', type=str, default='results', help='Output directory')
@@ -67,7 +67,7 @@ def main():
     # Data preprocessing
     print("\n[2/8] Data preprocessing...")
     cleaner = DataCleaner()
-    df = cleaner.fit_transform(df, args.target_column)
+    df = cleaner.fit_transform(df, args.target_column, remove_dup=True)
     
     # Skip outlier removal for datasets with severe class imbalance
     # to preserve minority class samples
@@ -121,15 +121,19 @@ def main():
         elif len(df_minority) < 10:
             print(f"Warning: Minority class has only {len(df_minority)} samples. Skipping diffusion-based data generation.")
         else:
-            # Train diffusion model on minority class features only
-            trainer = TabDDPMTrainer(epochs=50)
-            trainer.fit(df_minority, args.target_column)
+            # Calculate target ratio for better class balance (e.g., 1:1 or 1:1.5)
+            target_ratio = 1.0  # 1:1 ratio
+            target_minority_count = int(len(df_majority) * target_ratio)
+            samples_needed = target_minority_count - len(df_minority)
             
-            generator = TabDDPMGenerator(trainer)
-            
-            # Generate synthetic samples to balance the dataset
-            samples_needed = len(df_majority) - len(df_minority)
             if samples_needed > 0:
+                # Train diffusion model on minority class features only
+                trainer = TabDDPMTrainer(epochs=50)
+                trainer.fit(df_minority, args.target_column)
+                
+                generator = TabDDPMGenerator(trainer)
+                
+                # Generate synthetic samples to balance the dataset
                 feature_names = [col for col in df_normalized.columns if col != args.target_column]
                 synthetic_samples = generator.sample(samples_needed, feature_names)
                 synthetic_samples[args.target_column] = 1
@@ -144,7 +148,7 @@ def main():
                                               save_path=os.path.join(args.output_dir, 'correlation_comparison.png'))
                 
                 df_normalized = df_balanced
-                print(f"Balanced dataset: {len(df_normalized)} samples")
+                print(f"Balanced dataset: {len(df_normalized)} samples (target ratio: {target_ratio}:1)")
             else:
                 print("Dataset is already balanced.")
     
@@ -171,15 +175,15 @@ def main():
     if len(class_counts) < 2:
         print("Warning: Only one class present in dataset. Disabling optimization.")
         args.use_optimization = False
-    elif class_counts.min() / class_counts.sum() < 0.01:  # Less than 1% minority class
+    elif class_counts.min() / class_counts.sum() < 0.05:  # Less than 5% minority class
         print("Warning: Severe class imbalance detected. Disabling optimization.")
         args.use_optimization = False
     
     # GA-PSO optimization
     if args.use_optimization:
         print("\n[5/8] GA-PSO hyperparameter optimization...")
-        optimizer = GAPSOHybridOptimizer(ga_generations=30, pso_iterations=50)
-        best_params = optimizer.optimize(X, y, cv=5, verbose=True)
+        optimizer = GAPSOHybridOptimizer(ga_generations=50, pso_iterations=50, ga_population_size=100)
+        best_params = optimizer.optimize(X, y, cv=10, verbose=True)
         
         # Save optimization history
         history = optimizer.get_optimization_history()
@@ -191,7 +195,7 @@ def main():
     # Train XGBoost model
     print("\n[6/8] Training XGBoost model...")
     model = XGBoostModel()
-    training_results = model.train(X, y, params=best_params, cv=5)
+    training_results = model.train(X, y, params=best_params, cv=10)
     
     # Save model
     model.save_model(os.path.join(args.output_dir, 'xgboost_model.pkl'))
@@ -223,18 +227,30 @@ def main():
     # External validation
     if args.external_validation:
         print("\n[External] External validation on Framingham dataset...")
-        df_external = pd.read_csv(args.external_validation)
-        
-        # Preprocess external data
-        df_external = cleaner.transform(df_external, args.target_column)
-        df_external = normalizer.transform(df_external, args.target_column)
-        
-        # Ensure same features
-        X_external = df_external[selected_features]
-        y_external = df_external[args.target_column]
-        
-        external_results = model.evaluate_on_external_data(X_external, y_external)
-        print(f"External AUC: {external_results['auc']:.4f}")
+        try:
+            df_external = pd.read_csv(args.external_validation)
+            
+            # Preprocess external data
+            df_external = cleaner.transform(df_external, args.target_column)
+            df_external = feature_engineer.transform(df_external, 
+                                                  add_bmi=True,
+                                                  add_pulse_pressure=True,
+                                                  add_age_groups=True,
+                                                  add_bp_category=True,
+                                                  add_risk_score=True)
+            df_external = normalizer.transform(df_external, args.target_column)
+            
+            # Ensure same features
+            if args.target_column in df_external.columns:
+                X_external = df_external[selected_features]
+                y_external = df_external[args.target_column]
+                
+                external_results = model.evaluate_on_external_data(X_external, y_external)
+                print(f"External AUC: {external_results['auc']:.4f}")
+            else:
+                print(f"Warning: Target column '{args.target_column}' not found in external dataset")
+        except Exception as e:
+            print(f"Error during external validation: {e}")
     
     print("\n" + "="*60)
     print("Pipeline completed successfully!")

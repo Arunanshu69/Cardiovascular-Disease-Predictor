@@ -37,13 +37,15 @@ class ParticleSwarmOptimizer:
         
         # Hyperparameter search space
         self.param_bounds = {
-            'max_depth': (3, 10),
-            'learning_rate': (0.01, 0.3),
-            'n_estimators': (50, 500),
-            'subsample': (0.5, 1.0),
-            'colsample_bytree': (0.5, 1.0),
-            'gamma': (0, 5),
-            'min_child_weight': (1, 10)
+            'max_depth': (3, 6),  # Reduced upper bound for simpler models
+            'learning_rate': (0.01, 0.2),
+            'n_estimators': (100, 500),
+            'subsample': (0.7, 1.0),
+            'colsample_bytree': (0.7, 1.0),  # Restricted
+            'gamma': (0.0, 2.0),  # Restricted
+            'min_child_weight': (1, 5),  # Restricted
+            'reg_alpha': (0.1, 2.0),  # Increased upper bound for L1 regularization
+            'reg_lambda': (1.0, 5.0)  # Increased upper bound for L2 regularization
         }
         
         self.best_params = None
@@ -129,6 +131,8 @@ class ParticleSwarmOptimizer:
                 colsample_bytree=params['colsample_bytree'],
                 gamma=params['gamma'],
                 min_child_weight=params['min_child_weight'],
+                reg_alpha=params.get('reg_alpha', 0.1),
+                reg_lambda=params.get('reg_lambda', 1.0),
                 random_state=self.random_state,
                 eval_metric='logloss',
                 n_jobs=-1

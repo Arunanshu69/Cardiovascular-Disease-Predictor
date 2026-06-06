@@ -3,6 +3,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 from typing import Optional, Tuple
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend to avoid tkinter errors
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -155,6 +157,38 @@ class TabDDPMGenerator:
             synthetic_data: Synthetic data DataFrame
             save_path: Optional path to save the plots
         """
+        from scipy.stats import ks_2samp, wasserstein_distance
+        
+        # Calculate statistical metrics
+        metrics = {}
+        for col in real_data.columns:
+            if pd.api.types.is_numeric_dtype(real_data[col]) and col in synthetic_data.columns:
+                # Kolmogorov-Smirnov test
+                ks_stat, ks_pvalue = ks_2samp(real_data[col].dropna(), synthetic_data[col].dropna())
+                
+                # Wasserstein distance
+                w_dist = wasserstein_distance(real_data[col].dropna(), synthetic_data[col].dropna())
+                
+                metrics[col] = {
+                    'ks_statistic': ks_stat,
+                    'ks_pvalue': ks_pvalue,
+                    'wasserstein_distance': w_dist
+                }
+        
+        # Calculate mean absolute correlation difference
+        real_corr = real_data.corr()
+        synth_corr = synthetic_data.corr()
+        if real_corr.shape == synth_corr.shape:
+            mean_corr_diff = np.abs(real_corr - synth_corr).mean().mean()
+            metrics['mean_correlation_difference'] = mean_corr_diff
+            print(f"Mean absolute correlation difference: {mean_corr_diff:.4f}")
+        
+        # Print summary statistics
+        print("Distribution similarity metrics:")
+        for col, col_metrics in metrics.items():
+            if col != 'mean_correlation_difference':
+                print(f"  {col}: KS stat={col_metrics['ks_statistic']:.4f}, p-value={col_metrics['ks_pvalue']:.4f}, Wasserstein={col_metrics['wasserstein_distance']:.4f}")
+        
         # Get common columns
         common_cols = [col for col in real_data.columns if col in synthetic_data.columns]
         

@@ -2,27 +2,35 @@ import pandas as pd
 import numpy as np
 from typing import Tuple, Optional, Literal
 from scipy import stats
+from sklearn.ensemble import IsolationForest
+from sklearn.neighbors import LocalOutlierFactor
 
 
 class OutlierRemover:
     """
-    Outlier removal module using Z-Score and IQR methods.
+    Outlier removal module using Z-Score, IQR, Isolation Forest, and Local Outlier Factor methods.
     """
     
-    def __init__(self, method: Literal['zscore', 'iqr', 'both'] = 'both', 
+    def __init__(self, method: Literal['zscore', 'iqr', 'both', 'isolation_forest', 'lof', 'ensemble'] = 'both', 
                  z_threshold: float = 3.0, 
-                 iqr_multiplier: float = 1.5):
+                 iqr_multiplier: float = 1.5,
+                 contamination: float = 0.05,
+                 n_neighbors: int = 20):
         """
         Initialize OutlierRemover.
         
         Args:
-            method: Method to use for outlier detection ('zscore', 'iqr', or 'both')
+            method: Method to use for outlier detection ('zscore', 'iqr', 'both', 'isolation_forest', 'lof', 'ensemble')
             z_threshold: Z-score threshold for outlier detection
             iqr_multiplier: IQR multiplier for outlier detection
+            contamination: Expected proportion of outliers for Isolation Forest and LOF
+            n_neighbors: Number of neighbors for Local Outlier Factor
         """
         self.method = method
         self.z_threshold = z_threshold
         self.iqr_multiplier = iqr_multiplier
+        self.contamination = contamination
+        self.n_neighbors = n_neighbors
         self.outlier_mask = None
         self.removed_indices = None
     
@@ -82,6 +90,62 @@ class OutlierRemover:
         
         return outlier_mask
     
+    def detect_isolation_forest_outliers(self, df: pd.DataFrame, columns: Optional[list] = None) -> pd.Series:
+        """
+        Detect outliers using Isolation Forest method.
+        
+        Args:
+            df: Input DataFrame
+            columns: List of columns to check (if None, check all numerical columns)
+            
+        Returns:
+            Boolean Series indicating outliers
+        """
+        if columns is None:
+            columns = df.select_dtypes(include=[np.number]).columns.tolist()
+        
+        df_subset = df[columns].copy()
+        
+        # Handle missing values
+        df_subset = df_subset.fillna(df_subset.median())
+        
+        # Fit Isolation Forest
+        iso_forest = IsolationForest(contamination=self.contamination, random_state=42)
+        outlier_labels = iso_forest.fit_predict(df_subset)
+        
+        # Isolation Forest returns -1 for outliers, 1 for inliers
+        outlier_mask = pd.Series(outlier_labels == -1, index=df.index)
+        
+        return outlier_mask
+    
+    def detect_lof_outliers(self, df: pd.DataFrame, columns: Optional[list] = None) -> pd.Series:
+        """
+        Detect outliers using Local Outlier Factor method.
+        
+        Args:
+            df: Input DataFrame
+            columns: List of columns to check (if None, check all numerical columns)
+            
+        Returns:
+            Boolean Series indicating outliers
+        """
+        if columns is None:
+            columns = df.select_dtypes(include=[np.number]).columns.tolist()
+        
+        df_subset = df[columns].copy()
+        
+        # Handle missing values
+        df_subset = df_subset.fillna(df_subset.median())
+        
+        # Fit Local Outlier Factor
+        lof = LocalOutlierFactor(n_neighbors=self.n_neighbors, contamination=self.contamination)
+        outlier_labels = lof.fit_predict(df_subset)
+        
+        # LOF returns -1 for outliers, 1 for inliers
+        outlier_mask = pd.Series(outlier_labels == -1, index=df.index)
+        
+        return outlier_mask
+    
     def fit(self, df: pd.DataFrame, columns: Optional[list] = None) -> 'OutlierRemover':
         """
         Fit the outlier remover on the dataset.
@@ -101,6 +165,21 @@ class OutlierRemover:
             zscore_mask = self.detect_zscore_outliers(df, columns)
             iqr_mask = self.detect_iqr_outliers(df, columns)
             self.outlier_mask = zscore_mask | iqr_mask
+        elif self.method == 'isolation_forest':
+            self.outlier_mask = self.detect_isolation_forest_outliers(df, columns)
+        elif self.method == 'lof':
+            self.outlier_mask = self.detect_lof_outliers(df, columns)
+        elif self.method == 'ensemble':
+            # Ensemble: combine all methods
+            zscore_mask = self.detect_zscore_outliers(df, columns)
+            iqr_mask = self.detect_iqr_outliers(df, columns)
+            iso_mask = self.detect_isolation_forest_outliers(df, columns)
+            lof_mask = self.detect_lof_outliers(df, columns)
+            # Outlier if detected by at least 2 methods
+            self.outlier_mask = (zscore_mask.astype(int) + iqr_mask.astype(int) + 
+                                iso_mask.astype(int) + lof_mask.astype(int)) >= 2
+        else:
+            raise ValueError(f"Unknown method: {self.method}")
         
         self.removed_indices = df[self.outlier_mask].index
         

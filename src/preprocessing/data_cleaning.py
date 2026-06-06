@@ -91,18 +91,22 @@ class DataCleaner:
         
         return df
     
-    def fit_transform(self, df: pd.DataFrame, target_column: Optional[str] = None) -> pd.DataFrame:
+    def fit_transform(self, df: pd.DataFrame, target_column: Optional[str] = None, remove_dup: bool = True) -> pd.DataFrame:
         """
         Fit and transform in one step.
         
         Args:
             df: Input DataFrame
             target_column: Name of target column (to exclude from imputation)
+            remove_dup: Whether to remove duplicate rows
             
         Returns:
             Cleaned DataFrame
         """
-        return self.fit(df, target_column).transform(df, target_column)
+        df_cleaned = self.fit(df, target_column).transform(df, target_column)
+        if remove_dup:
+            df_cleaned = self.remove_duplicates(df_cleaned)
+        return df_cleaned
     
     def get_missing_info(self, df: pd.DataFrame) -> pd.DataFrame:
         """

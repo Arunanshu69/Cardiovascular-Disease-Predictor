@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend to avoid tkinter errors
 import matplotlib.pyplot as plt
 import shap
 from typing import Optional, Dict, Tuple
@@ -65,7 +67,7 @@ class SHAPAnalyzer:
             self.fit(X)
         
         plt.figure(figsize=figsize)
-        shap.summary_plot(self.shap_values, X, show=False)
+        shap.summary_plot(self.shap_values, X, show=False, rng=np.random.default_rng(42))
         plt.title('SHAP Summary Plot')
         plt.tight_layout()
         
@@ -127,7 +129,7 @@ class SHAPAnalyzer:
             self.fit(X)
         
         plt.figure(figsize=figsize)
-        shap.summary_plot(self.shap_values, X, plot_type="bar", show=False)
+        shap.summary_plot(self.shap_values, X, plot_type="bar", show=False, rng=np.random.default_rng(42))
         plt.title('SHAP Feature Importance')
         plt.tight_layout()
         

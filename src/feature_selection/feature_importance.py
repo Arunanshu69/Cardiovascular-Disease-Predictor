@@ -1,5 +1,7 @@
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend to avoid tkinter errors
 import matplotlib.pyplot as plt
 from typing import Optional, List, Tuple
 from xgboost import XGBClassifier
@@ -36,10 +38,10 @@ class FeatureImportanceAnalyzer:
         Returns:
             self: Fitted FeatureImportanceAnalyzer instance
         """
-        # Default XGBoost parameters
+        # Default XGBoost parameters (consistent with optimization search space)
         default_params = {
             'n_estimators': 100,
-            'max_depth': 6,
+            'max_depth': 4,
             'learning_rate': 0.1,
             'subsample': 0.8,
             'colsample_bytree': 0.8,

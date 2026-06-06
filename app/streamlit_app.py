@@ -4,6 +4,8 @@ import numpy as np
 import joblib
 import os
 import sys
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend to avoid tkinter errors
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -88,50 +90,124 @@ if model is None:
 # Feature input section
 st.header("Patient Information")
 
+# Get model features to determine which inputs to show
+model_features = model.feature_names or []
+
+# Create dynamic input fields based on model features
+input_data = {}
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("Demographics")
-    age = st.slider("Age", 18, 100, 50)
-    gender = st.selectbox("Gender", ["Female", "Male"])
-    height = st.slider("Height (cm)", 130, 220, 170)
-    weight = st.slider("Weight (kg)", 40, 150, 70)
-
-    st.subheader("Blood Pressure")
-    ap_high = st.slider("Systolic Blood Pressure (AP_HIGH)", 90, 200, 120)
-    ap_low = st.slider("Diastolic Blood Pressure (AP_LOW)", 60, 140, 80)
+    st.subheader("Demographics & Vitals")
+    if 'age' in model_features or 'AGE' in model_features:
+        age = st.slider("Age", 18, 100, 50)
+        input_data['age' if 'age' in model_features else 'AGE'] = age
+    
+    if 'male' in model_features or 'GENDER' in model_features:
+        gender = st.selectbox("Gender", ["Female", "Male"])
+        gender_num = 1 if gender == "Male" else 0
+        input_data['male' if 'male' in model_features else 'GENDER'] = gender_num
+    
+    if 'sysBP' in model_features or 'AP_HIGH' in model_features:
+        ap_high = st.slider("Systolic Blood Pressure", 90, 200, 120)
+        input_data['sysBP' if 'sysBP' in model_features else 'AP_HIGH'] = ap_high
+    
+    if 'diaBP' in model_features or 'AP_LOW' in model_features:
+        ap_low = st.slider("Diastolic Blood Pressure", 60, 140, 80)
+        input_data['diaBP' if 'diaBP' in model_features else 'AP_LOW'] = ap_low
+    
+    if 'BMI' in model_features:
+        bmi = st.slider("BMI", 15, 50, 25)
+        input_data['BMI'] = bmi
+    
+    if 'heartRate' in model_features:
+        heart_rate = st.slider("Heart Rate", 40, 200, 75)
+        input_data['heartRate'] = heart_rate
 
 with col2:
-    st.subheader("Lab Results")
-    cholesterol = st.selectbox("Cholesterol Level", ["Normal", "Above Normal", "Well Above Normal"])
-    glucose = st.selectbox("Glucose Level", ["Normal", "Above Normal", "Well Above Normal"])
+    st.subheader("Lab Results & Lifestyle")
+    if 'totChol' in model_features or 'CHOLESTEROL' in model_features:
+        cholesterol = st.selectbox("Cholesterol Level", ["Normal", "Above Normal", "Well Above Normal"])
+        cholesterol_num = 1 if cholesterol == "Normal" else (2 if cholesterol == "Above Normal" else 3)
+        input_data['totChol' if 'totChol' in model_features else 'CHOLESTEROL'] = cholesterol_num
+    
+    if 'glucose' in model_features or 'GLUCOSE' in model_features:
+        glucose = st.selectbox("Glucose Level", ["Normal", "Above Normal", "Well Above Normal"])
+        glucose_num = 1 if glucose == "Normal" else (2 if glucose == "Above Normal" else 3)
+        input_data['glucose' if 'glucose' in model_features else 'GLUCOSE'] = glucose_num
+    
+    if 'currentSmoker' in model_features or 'SMOKE' in model_features:
+        smoking = st.selectbox("Smoking", ["No", "Yes"])
+        smoking_num = 1 if smoking == "Yes" else 0
+        input_data['currentSmoker' if 'currentSmoker' in model_features else 'SMOKE'] = smoking_num
+    
+    if 'BPMeds' in model_features:
+        bp_meds = st.selectbox("Blood Pressure Medication", ["No", "Yes"])
+        bp_meds_num = 1 if bp_meds == "Yes" else 0
+        input_data['BPMeds'] = bp_meds_num
+    
+    if 'prevalentStroke' in model_features:
+        stroke = st.selectbox("History of Stroke", ["No", "Yes"])
+        stroke_num = 1 if stroke == "Yes" else 0
+        input_data['prevalentStroke'] = stroke_num
+    
+    if 'prevalentHyp' in model_features:
+        hypertension = st.selectbox("History of Hypertension", ["No", "Yes"])
+        hypertension_num = 1 if hypertension == "Yes" else 0
+        input_data['prevalentHyp'] = hypertension_num
+    
+    if 'diabetes' in model_features:
+        diabetes = st.selectbox("Diabetes", ["No", "Yes"])
+        diabetes_num = 1 if diabetes == "Yes" else 0
+        input_data['diabetes'] = diabetes_num
+    
+    if 'education' in model_features:
+        education = st.slider("Education Level", 1, 4, 2)
+        input_data['education'] = education
+    
+    if 'cigsPerDay' in model_features:
+        cigs = st.slider("Cigarettes per Day", 0, 70, 0)
+        input_data['cigsPerDay'] = cigs
 
-    st.subheader("Lifestyle")
-    smoking = st.selectbox("Smoking", ["No", "Yes"])
-    alcohol = st.selectbox("Alcohol Consumption", ["No", "Yes"])
-    physical_activity = st.slider("Physical Activity (hours/week)", 0, 20, 3)
+# Create input DataFrame
+input_data = pd.DataFrame([input_data])
 
-# Convert categorical inputs to model encoding
-gender_num = 2 if gender == "Male" else 1
-cholesterol_num = 1 if cholesterol == "Normal" else (2 if cholesterol == "Above Normal" else 3)
-glucose_num = 1 if glucose == "Normal" else (2 if glucose == "Above Normal" else 3)
-smoking_num = 1 if smoking == "Yes" else 0
-alcohol_num = 1 if alcohol == "Yes" else 0
-
-# Create input DataFrame matching the trained model's expected features
-input_data = pd.DataFrame({
-    'AGE': [age],
-    'GENDER': [gender_num],
-    'HEIGHT': [height],
-    'WEIGHT': [weight],
-    'AP_HIGH': [ap_high],
-    'AP_LOW': [ap_low],
-    'CHOLESTEROL': [cholesterol_num],
-    'GLUCOSE': [glucose_num],
-    'SMOKE': [smoking_num],
-    'ALCOHOL': [alcohol_num],
-    'PHYSICAL_ACTIVITY': [physical_activity]
-})
+# Fill missing features with default values
+for feature in model_features:
+    if feature not in input_data.columns:
+        if feature in ['PULSE_PRESSURE', 'AGE_GROUP', 'BP_CATEGORY', 'RISK_SCORE']:
+            # These are engineered features - calculate them if possible
+            if feature == 'PULSE_PRESSURE' and 'sysBP' in input_data.columns and 'diaBP' in input_data.columns:
+                input_data['PULSE_PRESSURE'] = input_data['sysBP'] - input_data['diaBP']
+            elif feature == 'AGE_GROUP' and 'age' in input_data.columns:
+                def categorize_age(age):
+                    if age < 30: return 0
+                    elif age < 40: return 1
+                    elif age < 50: return 2
+                    elif age < 60: return 3
+                    elif age < 70: return 4
+                    else: return 5
+                input_data['AGE_GROUP'] = input_data['age'].apply(categorize_age)
+            elif feature == 'BP_CATEGORY' and 'sysBP' in input_data.columns and 'diaBP' in input_data.columns:
+                def categorize_bp(row):
+                    systolic = row['sysBP']
+                    diastolic = row['diaBP']
+                    if systolic < 120 and diastolic < 80: return 0
+                    elif systolic < 140 or diastolic < 90: return 1
+                    elif systolic < 160 or diastolic < 100: return 2
+                    else: return 3
+                input_data['BP_CATEGORY'] = input_data.apply(categorize_bp, axis=1)
+            elif feature == 'RISK_SCORE' and 'totChol' in input_data.columns and 'glucose' in input_data.columns and 'age' in input_data.columns:
+                def calculate_risk_score(row):
+                    cholesterol_score = (row['totChol'] - 1) / 2
+                    glucose_score = (row['glucose'] - 1) / 2
+                    age_score = row['age'] / 100
+                    return cholesterol_score + glucose_score + age_score
+                input_data['RISK_SCORE'] = input_data.apply(calculate_risk_score, axis=1)
+            else:
+                input_data[feature] = 0
+        else:
+            input_data[feature] = 0
 
 # Predict button
 if st.button("Predict Heart Disease Risk", type="primary"):

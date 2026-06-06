@@ -45,16 +45,18 @@ class XGBoostModel:
         """
         self.feature_names = X.columns.tolist()
         
-        # Default parameters
+        # Default parameters with regularization to prevent overfitting
         if params is None:
             params = {
-                'max_depth': 6,
+                'max_depth': 4,  # Restricted to prevent overly complex trees
                 'learning_rate': 0.1,
                 'n_estimators': 100,
                 'subsample': 0.8,
                 'colsample_bytree': 0.8,
                 'gamma': 0,
                 'min_child_weight': 1,
+                'reg_alpha': 0.5,  # Increased L1 regularization
+                'reg_lambda': 2.0,  # Increased L2 regularization
                 'random_state': self.random_state,
                 'eval_metric': 'logloss',
                 'n_jobs': -1
@@ -68,9 +70,18 @@ class XGBoostModel:
             X, y, test_size=test_size, random_state=self.random_state, stratify=y
         )
         
-        # Initialize and train model
+        # Initialize and train model with early stopping
         self.model = XGBClassifier(**params)
-        self.model.fit(X_train, y_train)
+        
+        # Use early stopping if n_estimators is large enough
+        if params.get('n_estimators', 100) > 50:
+            self.model.fit(
+                X_train, y_train,
+                eval_set=[(X_test, y_test)],
+                verbose=False
+            )
+        else:
+            self.model.fit(X_train, y_train)
         
         # Predictions
         y_train_pred = self.model.predict(X_train)
