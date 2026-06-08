@@ -98,6 +98,9 @@ class GeneticAlgorithmOptimizer:
                 X_train_fold, X_val_fold = X.iloc[train_idx], X.iloc[val_idx]
                 y_train_fold, y_val_fold = y.iloc[train_idx], y.iloc[val_idx]
                 
+                # Calculate scale_pos_weight for class imbalance
+                scale_pos_weight = (len(y_train_fold) - y_train_fold.sum()) / max(y_train_fold.sum(), 1)
+                
                 model = XGBClassifier(
                     max_depth=int(individual['max_depth']),
                     learning_rate=individual['learning_rate'],
@@ -108,9 +111,10 @@ class GeneticAlgorithmOptimizer:
                     min_child_weight=int(individual['min_child_weight']),
                     reg_alpha=individual.get('reg_alpha', 0.1),
                     reg_lambda=individual.get('reg_lambda', 1.0),
+                    scale_pos_weight=scale_pos_weight,
                     random_state=self.random_state,
                     eval_metric='logloss',
-                    n_jobs=-1
+                    n_jobs=1
                 )
                 
                 model.fit(X_train_fold, y_train_fold)

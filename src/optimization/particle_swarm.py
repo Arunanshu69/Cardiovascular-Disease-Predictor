@@ -131,6 +131,9 @@ class ParticleSwarmOptimizer:
                 X_train_fold, X_val_fold = X.iloc[train_idx], X.iloc[val_idx]
                 y_train_fold, y_val_fold = y.iloc[train_idx], y.iloc[val_idx]
                 
+                # Calculate scale_pos_weight for class imbalance
+                scale_pos_weight = (len(y_train_fold) - y_train_fold.sum()) / max(y_train_fold.sum(), 1)
+                
                 model = XGBClassifier(
                     max_depth=params['max_depth'],
                     learning_rate=params['learning_rate'],
@@ -141,9 +144,10 @@ class ParticleSwarmOptimizer:
                     min_child_weight=params['min_child_weight'],
                     reg_alpha=params.get('reg_alpha', 0.1),
                     reg_lambda=params.get('reg_lambda', 1.0),
+                    scale_pos_weight=scale_pos_weight,
                     random_state=self.random_state,
                     eval_metric='logloss',
-                    n_jobs=-1
+                    n_jobs=1
                 )
                 
                 model.fit(X_train_fold, y_train_fold)
