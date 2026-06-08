@@ -108,49 +108,15 @@ def main():
             return
     
     # Diffusion-based synthetic data generation
+    # Skip during optimization to prevent data leakage in CV
+    # Will generate after optimization for final model training only
     if args.use_diffusion:
-        print("\n[3/8] Training TabDDPM for synthetic data generation...")
-        
-        # Separate minority class for training diffusion model
-        df_minority = df_normalized[df_normalized[args.target_column] == 1]
-        df_majority = df_normalized[df_normalized[args.target_column] == 0]
-        
-        # Check if minority class has enough samples
-        if len(df_minority) == 0:
-            print("Warning: No samples in minority class. Skipping diffusion-based data generation.")
-        elif len(df_minority) < 10:
-            print(f"Warning: Minority class has only {len(df_minority)} samples. Skipping diffusion-based data generation.")
-        else:
-            # Calculate target ratio for better class balance (e.g., 1:1 or 1:1.5)
-            target_ratio = 1.0  # 1:1 ratio
-            target_minority_count = int(len(df_majority) * target_ratio)
-            samples_needed = target_minority_count - len(df_minority)
-            
-            if samples_needed > 0:
-                # Train diffusion model on minority class features only
-                trainer = TabDDPMTrainer(epochs=50)
-                trainer.fit(df_minority, args.target_column)
-                
-                generator = TabDDPMGenerator(trainer)
-                
-                # Generate synthetic samples to balance the dataset
-                feature_names = [col for col in df_normalized.columns if col != args.target_column]
-                synthetic_samples = generator.sample(samples_needed, feature_names)
-                synthetic_samples[args.target_column] = 1
-                
-                # Combine with original data
-                df_balanced = pd.concat([df_normalized, synthetic_samples], ignore_index=True)
-                
-                # Save comparison plots
-                generator.compare_distributions(df_minority[feature_names], synthetic_samples[feature_names], 
-                                               save_path=os.path.join(args.output_dir, 'distribution_comparison.png'))
-                generator.compare_correlations(df_normalized, df_balanced, 
-                                              save_path=os.path.join(args.output_dir, 'correlation_comparison.png'))
-                
-                df_normalized = df_balanced
-                print(f"Balanced dataset: {len(df_normalized)} samples (target ratio: {target_ratio}:1)")
-            else:
-                print("Dataset is already balanced.")
+        print("\n[3/8] Skipping synthetic data generation during optimization...")
+        print("Note: Synthetic data will be generated after optimization for final training only.")
+        print("      This prevents data leakage in cross-validation during optimization.")
+        synthetic_data_needed = True
+    else:
+        synthetic_data_needed = False
     
     # Feature selection
     print("\n[4/8] Feature selection...")
@@ -191,6 +157,55 @@ def main():
         history['pso_history'].to_csv(os.path.join(args.output_dir, 'pso_history.csv'), index=False)
     else:
         best_params = None
+    
+    # Generate synthetic data after optimization for final training
+    if synthetic_data_needed:
+        print("\n[5.5/8] Generating synthetic data for final model training...")
+        
+        # Separate minority class for training diffusion model
+        df_minority = df_normalized[df_normalized[args.target_column] == 1]
+        df_majority = df_normalized[df_normalized[args.target_column] == 0]
+        
+        # Check if minority class has enough samples
+        if len(df_minority) == 0:
+            print("Warning: No samples in minority class. Skipping diffusion-based data generation.")
+        elif len(df_minority) < 10:
+            print(f"Warning: Minority class has only {len(df_minority)} samples. Skipping diffusion-based data generation.")
+        else:
+            # Calculate target ratio for better class balance (e.g., 1:1 or 1:1.5)
+            target_ratio = 1.0  # 1:1 ratio
+            target_minority_count = int(len(df_majority) * target_ratio)
+            samples_needed = target_minority_count - len(df_minority)
+            
+            if samples_needed > 0:
+                # Train diffusion model on minority class features only
+                trainer = TabDDPMTrainer(epochs=50)
+                trainer.fit(df_minority, args.target_column)
+                
+                generator = TabDDPMGenerator(trainer)
+                
+                # Generate synthetic samples to balance the dataset
+                feature_names = [col for col in df_normalized.columns if col != args.target_column]
+                synthetic_samples = generator.sample(samples_needed, feature_names)
+                synthetic_samples[args.target_column] = 1
+                
+                # Combine with original data
+                df_balanced = pd.concat([df_normalized, synthetic_samples], ignore_index=True)
+                
+                # Save comparison plots
+                generator.compare_distributions(df_minority[feature_names], synthetic_samples[feature_names], 
+                                               save_path=os.path.join(args.output_dir, 'distribution_comparison.png'))
+                generator.compare_correlations(df_normalized, df_balanced, 
+                                              save_path=os.path.join(args.output_dir, 'correlation_comparison.png'))
+                
+                df_normalized = df_balanced
+                print(f"Balanced dataset: {len(df_normalized)} samples (target ratio: {target_ratio}:1)")
+                
+                # Update X and y with balanced data
+                X = df_normalized[selected_features]
+                y = df_normalized[args.target_column]
+            else:
+                print("Dataset is already balanced.")
     
     # Train XGBoost model
     print("\n[6/8] Training XGBoost model...")

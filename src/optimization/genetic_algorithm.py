@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from typing import Dict, Callable, Optional, Tuple
 from xgboost import XGBClassifier
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_score, StratifiedKFold
 import random
 
 
@@ -76,7 +76,7 @@ class GeneticAlgorithmOptimizer:
             population.append(individual)
         return population
     
-    def _evaluate_fitness(self, individual: Dict, X: pd.DataFrame, y: pd.Series, cv: int = 5) -> float:
+    def _evaluate_fitness(self, individual: dict, X: pd.DataFrame, y: pd.Series, cv: int = 5) -> float:
         """
         Evaluate fitness of an individual using cross-validation.
         
@@ -90,23 +90,37 @@ class GeneticAlgorithmOptimizer:
             ROC-AUC score
         """
         try:
-            model = XGBClassifier(
-                max_depth=int(individual['max_depth']),
-                learning_rate=individual['learning_rate'],
-                n_estimators=int(individual['n_estimators']),
-                subsample=individual['subsample'],
-                colsample_bytree=individual['colsample_bytree'],
-                gamma=individual['gamma'],
-                min_child_weight=int(individual['min_child_weight']),
-                reg_alpha=individual.get('reg_alpha', 0.1),
-                reg_lambda=individual.get('reg_lambda', 1.0),
-                random_state=self.random_state,
-                eval_metric='logloss',
-                n_jobs=-1
-            )
+            # Use StratifiedKFold for balanced class distribution
+            skf = StratifiedKFold(n_splits=cv, shuffle=True, random_state=self.random_state)
+            scores = []
             
-            scores = cross_val_score(model, X, y, cv=cv, scoring='roc_auc', n_jobs=-1)
-            mean_score = scores.mean()
+            for train_idx, val_idx in skf.split(X, y):
+                X_train_fold, X_val_fold = X.iloc[train_idx], X.iloc[val_idx]
+                y_train_fold, y_val_fold = y.iloc[train_idx], y.iloc[val_idx]
+                
+                model = XGBClassifier(
+                    max_depth=int(individual['max_depth']),
+                    learning_rate=individual['learning_rate'],
+                    n_estimators=int(individual['n_estimators']),
+                    subsample=individual['subsample'],
+                    colsample_bytree=individual['colsample_bytree'],
+                    gamma=individual['gamma'],
+                    min_child_weight=int(individual['min_child_weight']),
+                    reg_alpha=individual.get('reg_alpha', 0.1),
+                    reg_lambda=individual.get('reg_lambda', 1.0),
+                    random_state=self.random_state,
+                    eval_metric='logloss',
+                    n_jobs=-1
+                )
+                
+                model.fit(X_train_fold, y_train_fold)
+                y_pred_proba = model.predict_proba(X_val_fold)[:, 1]
+                
+                from sklearn.metrics import roc_auc_score
+                fold_score = roc_auc_score(y_val_fold, y_pred_proba)
+                scores.append(fold_score)
+            
+            mean_score = np.mean(scores)
             
             # Handle NaN or invalid scores
             if np.isnan(mean_score) or np.isinf(mean_score):

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from typing import Dict, Optional, Tuple
 from xgboost import XGBClassifier
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_score, StratifiedKFold
 
 
 class ParticleSwarmOptimizer:
@@ -123,23 +123,37 @@ class ParticleSwarmOptimizer:
                 params[param] = np.clip(position[i], self.param_bounds[param][0], self.param_bounds[param][1])
         
         try:
-            model = XGBClassifier(
-                max_depth=params['max_depth'],
-                learning_rate=params['learning_rate'],
-                n_estimators=params['n_estimators'],
-                subsample=params['subsample'],
-                colsample_bytree=params['colsample_bytree'],
-                gamma=params['gamma'],
-                min_child_weight=params['min_child_weight'],
-                reg_alpha=params.get('reg_alpha', 0.1),
-                reg_lambda=params.get('reg_lambda', 1.0),
-                random_state=self.random_state,
-                eval_metric='logloss',
-                n_jobs=-1
-            )
+            # Use StratifiedKFold for balanced class distribution
+            skf = StratifiedKFold(n_splits=cv, shuffle=True, random_state=self.random_state)
+            scores = []
             
-            scores = cross_val_score(model, X, y, cv=cv, scoring='roc_auc', n_jobs=-1)
-            mean_score = scores.mean()
+            for train_idx, val_idx in skf.split(X, y):
+                X_train_fold, X_val_fold = X.iloc[train_idx], X.iloc[val_idx]
+                y_train_fold, y_val_fold = y.iloc[train_idx], y.iloc[val_idx]
+                
+                model = XGBClassifier(
+                    max_depth=params['max_depth'],
+                    learning_rate=params['learning_rate'],
+                    n_estimators=params['n_estimators'],
+                    subsample=params['subsample'],
+                    colsample_bytree=params['colsample_bytree'],
+                    gamma=params['gamma'],
+                    min_child_weight=params['min_child_weight'],
+                    reg_alpha=params.get('reg_alpha', 0.1),
+                    reg_lambda=params.get('reg_lambda', 1.0),
+                    random_state=self.random_state,
+                    eval_metric='logloss',
+                    n_jobs=-1
+                )
+                
+                model.fit(X_train_fold, y_train_fold)
+                y_pred_proba = model.predict_proba(X_val_fold)[:, 1]
+                
+                from sklearn.metrics import roc_auc_score
+                fold_score = roc_auc_score(y_val_fold, y_pred_proba)
+                scores.append(fold_score)
+            
+            mean_score = np.mean(scores)
             
             # Handle NaN or invalid scores
             if np.isnan(mean_score) or np.isinf(mean_score):

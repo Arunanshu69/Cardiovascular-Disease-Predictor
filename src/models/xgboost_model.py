@@ -97,7 +97,7 @@ class XGBoostModel:
         
         # Cross-validation
         cv_scores = cross_val_score(
-            self.model, X, y, cv=cv, scoring='roc_auc', n_jobs=-1
+            self.model, X, y, cv=cv, scoring='roc_auc', n_jobs=1
         )
         
         self.is_fitted = True
