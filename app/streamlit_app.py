@@ -59,7 +59,7 @@ st.markdown('<div class="main-header">❤️ Heart Disease Prediction</div>', un
 st.sidebar.header("Model Configuration")
 
 # Model path
-model_path = st.sidebar.text_input("Model Path", "results/xgboost_model.pkl")
+model_path = st.sidebar.text_input("Model Path", "results_framingham/xgboost_model.pkl")
 
 # Load model
 @st.cache_resource
