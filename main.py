@@ -158,11 +158,11 @@ def main():
     else:
         best_params = None
     
-    # Generate synthetic data after optimization for final training
+    # Generate synthetic data for entire dataset (after optimization)
     if synthetic_data_needed:
         print("\n[5.5/8] Generating synthetic data for final model training...")
         
-        # Separate minority class for training diffusion model
+        # Separate minority class from entire dataset
         df_minority = df_normalized[df_normalized[args.target_column] == 1]
         df_majority = df_normalized[df_normalized[args.target_column] == 0]
         
@@ -189,25 +189,23 @@ def main():
                 synthetic_samples = generator.sample(samples_needed, feature_names)
                 synthetic_samples[args.target_column] = 1
                 
-                # Combine with original data
-                df_balanced = pd.concat([df_normalized, synthetic_samples], ignore_index=True)
-                
                 # Save comparison plots
                 generator.compare_distributions(df_minority[feature_names], synthetic_samples[feature_names], 
                                                save_path=os.path.join(args.output_dir, 'distribution_comparison.png'))
-                generator.compare_correlations(df_normalized, df_balanced, 
+                generator.compare_correlations(df_normalized, pd.concat([df_normalized, synthetic_samples], ignore_index=True), 
                                               save_path=os.path.join(args.output_dir, 'correlation_comparison.png'))
                 
-                df_normalized = df_balanced
-                print(f"Balanced dataset: {len(df_normalized)} samples (target ratio: {target_ratio}:1)")
+                # Combine with original data
+                df_balanced = pd.concat([df_normalized, synthetic_samples], ignore_index=True)
+                print(f"Balanced dataset: {len(df_balanced)} samples (target ratio: {target_ratio}:1)")
                 
                 # Update X and y with balanced data
-                X = df_normalized[selected_features]
-                y = df_normalized[args.target_column]
+                X = df_balanced[selected_features]
+                y = df_balanced[args.target_column]
             else:
                 print("Dataset is already balanced.")
     
-    # Train XGBoost model
+    # Train XGBoost model on balanced dataset
     print("\n[6/8] Training XGBoost model...")
     model = XGBoostModel()
     training_results = model.train(X, y, params=best_params, cv=10)
@@ -215,7 +213,7 @@ def main():
     # Save model
     model.save_model(os.path.join(args.output_dir, 'xgboost_model.pkl'))
     
-    # Evaluation
+    # Evaluation on balanced dataset
     print("\n[7/8] Model evaluation...")
     metrics_calc = MetricsCalculator()
     
