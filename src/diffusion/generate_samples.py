@@ -159,6 +159,11 @@ class TabDDPMGenerator:
         """
         from scipy.stats import ks_2samp, wasserstein_distance
         
+        # Set better style
+        sns.set_style("whitegrid")
+        plt.rcParams['figure.facecolor'] = 'white'
+        plt.rcParams['axes.facecolor'] = 'white'
+        
         # Calculate statistical metrics
         metrics = {}
         for col in real_data.columns:
@@ -192,35 +197,82 @@ class TabDDPMGenerator:
         # Get common columns
         common_cols = [col for col in real_data.columns if col in synthetic_data.columns]
         
-        # Create subplots
-        n_cols = min(4, len(common_cols))
+        # Create subplots with better sizing
+        n_cols = min(3, len(common_cols))
         n_rows = (len(common_cols) + n_cols - 1) // n_cols
         
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=(20, 5 * n_rows))
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(18, 6 * n_rows))
         axes = axes.flatten() if n_rows > 1 else [axes]
         
         for idx, col in enumerate(common_cols):
             ax = axes[idx]
             
-            # Plot real data distribution
-            ax.hist(real_data[col].dropna(), bins=30, alpha=0.5, label='Real', density=True)
+            real_vals = real_data[col].dropna()
+            synth_vals = synthetic_data[col].dropna()
             
-            # Plot synthetic data distribution
-            ax.hist(synthetic_data[col].dropna(), bins=30, alpha=0.5, label='Synthetic', density=True)
+            # Calculate optimal bins using Freedman-Diaconis rule
+            def freedman_diaconis_bins(data):
+                q25, q75 = np.percentile(data, [25, 75])
+                iqr = q75 - q25
+                n = len(data)
+                bin_width = 2 * iqr / (n ** (1/3))
+                if bin_width == 0:
+                    bin_width = 1
+                bins = int((data.max() - data.min()) / bin_width)
+                return max(10, min(50, bins))
             
-            ax.set_xlabel(col)
-            ax.set_ylabel('Density')
-            ax.set_title(f'Distribution Comparison: {col}')
-            ax.legend()
+            bins_real = freedman_diaconis_bins(real_vals)
+            bins_synth = freedman_diaconis_bins(synth_vals)
+            bins = max(bins_real, bins_synth)
+            
+            # Plot histograms with better styling
+            ax.hist(real_vals, bins=bins, alpha=0.6, label='Real Data', 
+                   density=True, color='#2E86AB', edgecolor='black', linewidth=0.5)
+            ax.hist(synth_vals, bins=bins, alpha=0.6, label='Synthetic Data', 
+                   density=True, color='#F24236', edgecolor='black', linewidth=0.5)
+            
+            # Add KDE curves for smoother comparison
+            from scipy.stats import gaussian_kde
+            try:
+                if len(real_vals) > 5 and real_vals.std() > 0:
+                    kde_real = gaussian_kde(real_vals)
+                    x_range = np.linspace(min(real_vals.min(), synth_vals.min()), 
+                                         max(real_vals.max(), synth_vals.max()), 200)
+                    ax.plot(x_range, kde_real(x_range), color='#2E86AB', linewidth=2, linestyle='-')
+            except (np.linalg.LinAlgError, ValueError):
+                pass  # Skip KDE if data has zero variance
+            
+            try:
+                if len(synth_vals) > 5 and synth_vals.std() > 0:
+                    kde_synth = gaussian_kde(synth_vals)
+                    x_range = np.linspace(min(real_vals.min(), synth_vals.min()), 
+                                         max(real_vals.max(), synth_vals.max()), 200)
+                    ax.plot(x_range, kde_synth(x_range), color='#F24236', linewidth=2, linestyle='--')
+            except (np.linalg.LinAlgError, ValueError):
+                pass  # Skip KDE if data has zero variance
+            
+            # Add statistical metrics to the plot
+            if col in metrics:
+                ks_stat = metrics[col]['ks_statistic']
+                w_dist = metrics[col]['wasserstein_distance']
+                ax.text(0.98, 0.95, f'KS: {ks_stat:.3f}\nWD: {w_dist:.3f}', 
+                       transform=ax.transAxes, fontsize=9, verticalalignment='top',
+                       horizontalalignment='right', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+            
+            ax.set_xlabel(col, fontsize=11, fontweight='bold')
+            ax.set_ylabel('Density', fontsize=11)
+            ax.set_title(f'Distribution Comparison: {col}', fontsize=12, fontweight='bold')
+            ax.legend(fontsize=10, loc='upper left')
+            ax.grid(True, alpha=0.3)
         
         # Hide unused subplots
         for idx in range(len(common_cols), len(axes)):
             axes[idx].axis('off')
         
-        plt.tight_layout()
+        plt.tight_layout(pad=3.0)
         
         if save_path:
-            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.savefig(save_path, dpi=300, bbox_inches='tight', facecolor='white')
             print(f"Distribution comparison saved to {save_path}")
         else:
             plt.show()
