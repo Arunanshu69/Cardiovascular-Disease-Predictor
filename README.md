@@ -64,6 +64,8 @@ HeartDiseasePrediction/
 │   ├── streamlit_app.py
 │
 ├── main.py
+├──plot_ga_convergence.py
+├──plot_pso_convergence.py
 ├── requirements.txt
 ├── README.md
 ```
